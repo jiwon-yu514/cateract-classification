@@ -1,13 +1,15 @@
-#FFT 모든 이미지 파일 변환
+#roi 추출
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+import sys
 import os
 
 input_forder_nor = "/content/drive/MyDrive/cateract classification/Healthy_final"
 input_forder_cat = "/content/drive/MyDrive/cateract classification/Cateract_final"
-output_forder_nor = "/content/drive/MyDrive/백내장 전처리 데이터/normal"
-output_forder_cat = "/content/drive/MyDrive/백내장 전처리 데이터/cateract"
+output_forder_nor = "/content/drive/MyDrive/백내장 전처리 데이터/normal"
+output_forder_cat = "/content/drive/MyDrive/백내장 전처리 데이터/cateract"
+
 
 def FFT(input_folder,output_folder):
   os.makedirs(output_folder, exist_ok=True)
@@ -15,22 +17,41 @@ def FFT(input_folder,output_folder):
   image_files = [f for f in os.listdir(input_folder) if f.endswith((".jpg"))]
 
   for img_file in image_files:
-
     img_path = os.path.join(input_folder, img_file)
     # 이미지 로드 및 그레이스케일 변환
     img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    output=img.copy()
 
     if img is None:
-            print(f"{img_file} 로드 실패!")
-            continue
+      print(f"{img_file} 로드 실패!")
+      continue
 
-    # 가우시안 블러 적용(노이즈제거)
-    blurred = cv2.GaussianBlur(img, (5, 5), 0)
+
+
+    center_x, center_y = 256, 256  # 중심 좌표
+    radius = 256  # 반지름
+
+    img = cv2.GaussianBlur(img, (5, 5), 0)
+
+    mask = np.zeros(img.shape[:2], dtype=np.uint8)
+    cv2.circle(mask, (center_x, center_y), radius, 255, -1)  # 흰색 원 그리기 (채우기)
+
+    roi = cv2.bitwise_and(output, output, mask=mask)
+
+    roi_bgra = cv2.cvtColor(roi, cv2.COLOR_GRAY2BGRA)
+
+    roi_bgra[mask == 0] = (0, 0, 0, 0)
+
+
+   # 가우시안 블러 적용(노이즈제거)
+    blurred = cv2.GaussianBlur(roi_bgra, (5, 5), 0)
 
     # CLAHE (대비 향상)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    #enhanced = clahe.apply((blurred*255).astype(np.uint8))  # CLAHE는 0~255 입력 필요
-    enhanced = clahe.apply(blurred)
+    blurred_gray = cv2.cvtColor(blurred, cv2.COLOR_BGRA2GRAY)
+
+    # CLAHE 적용
+    enhanced = clahe.apply(blurred_gray)
 
     # 2D 푸리에 변환 수행
     f = np.fft.fft2(enhanced)
