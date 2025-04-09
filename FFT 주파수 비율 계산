@@ -1,3 +1,4 @@
+# 주파수 비율 계산
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
@@ -9,6 +10,7 @@ input_forder_cat = "/content/drive/MyDrive/cateract classification/Cateract_fina
 
 eye_nor = "정상 눈"
 eye_cat = "백내장 눈"
+
 
 
 def FFT(img_path):
@@ -48,12 +50,14 @@ def FFT(img_path):
   # 2D 푸리에 변환 수행
   f = np.fft.fft2(enhanced)
   fshift = np.fft.fftshift(f)  # 중심을 이동
-  
+
   return fshift, img.shape
 
-    
-def fft_analysis(input,eye):
 
+def fft_analysis(input,eye):
+    average = []
+    max = 0
+    min = 0
     image_files = [f for f in os.listdir(input) if f.endswith((".jpg",".jpeg"))]
 
     if not image_files:
@@ -64,7 +68,7 @@ def fft_analysis(input,eye):
 
     for idx,img_file in enumerate(image_files):
       img_path = os.path.join(input, img_file)
-      
+
       # 이미지 로드 및 그레이스케일 변환
       fshift,shape = FFT(img_path)
 
@@ -81,15 +85,23 @@ def fft_analysis(input,eye):
       # 고주파 영역 (가장자리 80% 영역)
       high_freq = np.sum(np.abs(fshift)) - low_freq
 
-     
+
       if low_freq == 0:
           freq_ratio = float('inf')
       else:
           freq_ratio = high_freq / low_freq
 
       print(f"[{idx+1:02d}] {eye}의 고주파/저주파 비율: {freq_ratio:.2f}")
+      
+      #주파수 비율 평균, 분산
+      average.append(freq_ratio)
+      if freq_ratio > max:
+        max = freq_ratio
+      if freq_ratio < min:
+        min = freq_ratio
+    
+    print(f"{eye}의 평균 : {np.mean(average)}, 분산 : {np.var(average)}")
 
 
-# 정상 및 백내장 이미지 비교
 fft_analysis(input_forder_nor, eye_nor)
 fft_analysis(input_forder_cat, eye_cat)
