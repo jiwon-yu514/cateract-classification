@@ -1,0 +1,95 @@
+import numpy as np
+import cv2
+import matplotlib.pyplot as plt
+import sys
+import os
+
+input_forder_nor = "/content/drive/MyDrive/cateract classification/Healthy_final"
+input_forder_cat = "/content/drive/MyDrive/cateract classification/Cateract_final"
+
+eye_nor = "정상 눈"
+eye_cat = "백내장 눈"
+
+
+def FFT(img_path):
+
+  img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+
+  if img is None:
+    return None,None
+
+  output=img.copy()
+
+  center_x, center_y = 256, 256  # 중심 좌표
+  radius = 256  # 반지름
+
+  img = cv2.GaussianBlur(img, (5, 5), 0)
+
+  mask = np.zeros(img.shape[:2], dtype=np.uint8)
+  cv2.circle(mask, (center_x, center_y), radius, 255, -1)  # 흰색 원 그리기 (채우기)
+
+  roi = cv2.bitwise_and(output, output, mask=mask)
+
+  roi_bgra = cv2.cvtColor(roi, cv2.COLOR_GRAY2BGRA)
+
+  roi_bgra[mask == 0] = (0, 0, 0, 0)
+
+
+  # 가우시안 블러 적용(노이즈제거)
+  blurred = cv2.GaussianBlur(roi_bgra, (5, 5), 0)
+
+  # CLAHE (대비 향상)
+  clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+  blurred_gray = cv2.cvtColor(blurred, cv2.COLOR_BGRA2GRAY)
+
+  # CLAHE 적용
+  enhanced = clahe.apply(blurred_gray)
+
+  # 2D 푸리에 변환 수행
+  f = np.fft.fft2(enhanced)
+  fshift = np.fft.fftshift(f)  # 중심을 이동
+  
+  return fshift, img.shape
+
+    
+def fft_analysis(input,eye):
+
+    image_files = [f for f in os.listdir(input) if f.endswith((".jpg",".jpeg"))]
+
+    if not image_files:
+        print(f"[경고] {input_folder}에 .jpg 또는 .jpeg 이미지가 없습니다.")
+        return
+
+    print(f"▶ {eye} 분석 시작 - 총 {len(image_files)}장\n")
+
+    for idx,img_file in enumerate(image_files):
+      img_path = os.path.join(input, img_file)
+      
+      # 이미지 로드 및 그레이스케일 변환
+      fshift,shape = FFT(img_path)
+
+      if fshift is None:
+        print(f"{img_file} 로드 실패!")
+        continue
+
+      rows, cols = shape
+      crow, ccol = rows // 2, cols // 2  # 중심 좌표
+
+      # 저주파 영역 (중앙부 20% 영역)
+      low_freq = np.sum(np.abs(fshift[crow-30:crow+30, ccol-30:ccol+30])) # 정상
+
+      # 고주파 영역 (가장자리 80% 영역)
+      high_freq = np.sum(np.abs(fshift)) - low_freq
+
+     
+      if low_freq == 0:
+          freq_ratio = float('inf')
+      else:
+          freq_ratio = high_freq / low_freq
+
+      print(f"[{idx+1:02d}] {eye}의 고주파/저주파 비율: {freq_ratio:.2f}")
+
+
+# 정상 및 백내장 이미지 비교
+fft_analysis(input_forder_nor, eye_nor)
+fft_analysis(input_forder_cat, eye_cat)
